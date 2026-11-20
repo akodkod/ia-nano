@@ -57,13 +57,16 @@ Drag the empty strip at the top to move the window; drag its edges to resize. Th
 
 ## Local installation
 
-The app is ad-hoc signed for local use, not notarized for distribution. After building with `./script/package.sh`, run these commands from the project folder:
+The app is ad-hoc signed for local use, not notarized for distribution. From the project folder:
 
 ```sh
-mkdir -p "$HOME/Applications" "$HOME/.local/bin"
-ditto "dist/iA Nano.app" "$HOME/Applications/iA Nano.app"
-cp bin/ia-nano "$HOME/.local/bin/ia-nano"
+./script/package.sh
+./script/install.sh
 ```
+
+The installer copies the app to `~/Applications/iA Nano.app` and the launcher to `~/.local/bin/ia-nano`. It is safe to rerun: updates replace the complete app bundle, so removed files do not linger. Close installed editor sessions first. The scripts refuse to overwrite unrelated files at either destination and do not edit your shell configuration.
+
+### zsh
 
 Add these lines to `~/.zshrc`:
 
@@ -80,6 +83,27 @@ Reload your shell configuration:
 source ~/.zshrc
 ```
 
+### fish
+
+Add these lines to `~/.config/fish/config.fish` (create the file if needed):
+
+```fish
+fish_add_path --path "$HOME/.local/bin"
+set -gx IA_NANO_APP "$HOME/Applications/iA Nano.app"
+set -gx EDITOR ia-nano
+set -gx VISUAL ia-nano
+```
+
+Reload the configuration:
+
+```fish
+source ~/.config/fish/config.fish
+```
+
+[`fish_add_path`](https://fishshell.com/docs/current/cmds/fish_add_path.html) avoids duplicate PATH entries. `--path` keeps the change in the current shell; the config file reapplies it for future shells.
+
+### Using and updating the installation
+
 You can now launch the app from Finder or use it from your terminal:
 
 ```sh
@@ -89,15 +113,28 @@ printf 'Write a prompt' | ia-nano -
 
 Finder launch opens an empty editor; use the terminal launcher when you need returned output. The installed copy does not depend on keeping the checkout in place.
 
-To update, close running iA Nano sessions, rebuild, and copy the app and launcher again from the project folder:
+To update, close installed iA Nano sessions and rerun:
 
 ```sh
 ./script/package.sh
-ditto "dist/iA Nano.app" "$HOME/Applications/iA Nano.app"
-cp bin/ia-nano "$HOME/.local/bin/ia-nano"
+./script/install.sh
 ```
 
+### Uninstalling
+
+Close installed iA Nano sessions, then run:
+
+```sh
+./script/uninstall.sh
+```
+
+It is safe to run repeatedly. Only the installed app and launcher are removed; your documents and saved accent preference remain. Remove the `IA_NANO_APP`, `EDITOR`, and `VISUAL` lines you added to your shell config, or change `EDITOR` and `VISUAL` to another editor. Keep `~/.local/bin` on PATH if you use it for other tools. Open a new shell afterward so old exported values are gone.
+
+For isolated script testing, `IA_NANO_INSTALL_ROOT` overrides the home-directory installation root. Normal installation does not require it.
+
 ## Checks
+
+`python3 Tests/Installation/test_install.py` checks repeated installs/uninstalls, updates, rollback, existing launchers, and running-app protection using disposable installation roots.
 
 `swift test` covers invocation parsing, UTF-8 and newline round trips, symlink and permission preservation, file conflicts, failure paths, and fenced highlighting with Unicode offsets. Run `python3 script/ui_smoke.py` for an interactive file/pipe/cancellation/concurrency check; follow its printed keyboard instructions. Additional manual checks cover focus, undo, caret rendering, dragging/resizing, and save-error recovery.
 
