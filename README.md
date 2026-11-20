@@ -39,12 +39,13 @@ ia-nano -- -unusual-filename
 | Cmd+, | Open Settings |
 | Cmd+Escape | Cancel without submitting or making additional writes |
 | Cmd+Z / Cmd+Shift+Z | Undo / redo |
+| Tab / Shift+Tab | Indent / unindent by two spaces (selected lines supported) |
 
 Cancellation does not revert earlier Cmd+S saves. Escape alone does not discard text. Exit status is `0` for success, `1` for cancellation, and `2` for argument/loading errors. Output mode writes only your text to stdout; diagnostics go to stderr. Save/output errors keep the editor open so text can be recovered.
 
 Open **iA Nano → Settings…** (Cmd+,) to choose the accent color. Each card previews the rounded caret; the selection applies immediately and persists across launches. Blue is the default. Settings can be closed with Cmd+W, Ctrl+W, or Escape without submitting your text.
 
-Drag the empty strip at the top to move the window; drag its edges to resize. The editor follows the system light/dark appearance. Text stays raw: backticks are visible, and syntax colors do not become document formatting. Use `ruby` / `rb` or `ts` / `typescript` after an opening fence. An unfinished fenced block is highlighted through the end of the document. Other languages stay plain.
+Drag the empty strip at the top to move the window; drag its edges to resize. The editor follows the system light/dark appearance. Typing a backtick inserts a matching backtick, or wraps selected text. Typing three backticks at the start of a line adds a closing fence on the next line, leaving the caret after the opening fence for a language name. Pasted text stays unchanged. Text stays raw: backticks are visible, and syntax colors do not become document formatting. Use `ruby` / `rb` or `ts` / `typescript` after an opening fence. An unfinished fenced block is highlighted through the end of the document. Other languages stay plain. Enter inside a fenced code block carries the current line’s indentation onto the new line; it does not infer additional indentation from language syntax.
 
 ## File behavior
 

@@ -31,6 +31,7 @@ final class EditorView: NSTextView {
     var cancel: (() -> Void)?
     var save: (() -> Void)?
     var appearanceChanged: (() -> Void)?
+    private var isPasting = false
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
@@ -52,10 +53,109 @@ final class EditorView: NSTextView {
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
         let text = (insertString as? NSAttributedString)?.string ?? (insertString as? String)
         if let text {
+            if text == "`", !isPasting, !hasMarkedText() {
+                insertBacktick(replacementRange: replacementRange)
+                return
+            }
             super.insertText(TextDocument.normalize(text), replacementRange: replacementRange)
         } else {
             super.insertText(insertString, replacementRange: replacementRange)
         }
+    }
+
+    override func paste(_ sender: Any?) {
+        isPasting = true
+        defer { isPasting = false }
+        super.paste(sender)
+    }
+
+    private func insertBacktick(replacementRange: NSRange) {
+        let source = string as NSString
+        let selection = replacementRange.location == NSNotFound ? selectedRange() : replacementRange
+        if selection.length > 0 {
+            super.insertText("`" + source.substring(with: selection) + "`", replacementRange: selection)
+            setSelectedRange(NSRange(location: selection.location + 1, length: selection.length))
+            return
+        }
+        let prefix = source.substring(to: selection.location)
+        let backslashes = prefix.reversed().prefix { $0 == "\\" }.count
+        if backslashes % 2 == 1 {
+            super.insertText("`", replacementRange: selection)
+            return
+        }
+        let line = source.lineRange(for: selection)
+        let beforeCaret = source.substring(with: NSRange(location: line.location, length: selection.location - line.location))
+        let indentation = String(beforeCaret.prefix { $0 == " " })
+        if indentation.count <= 3, beforeCaret == indentation + "``",
+           Fence.scan(source.substring(to: line.location)).last?.markers.count != 1 {
+            super.insertText("`\n" + indentation + "```", replacementRange: selection)
+            setSelectedRange(NSRange(location: selection.location + 1, length: 0))
+        } else if selection.location < source.length, source.character(at: selection.location) == 96 {
+            setSelectedRange(NSRange(location: selection.location + 1, length: 0))
+        } else if indentation.count <= 3,
+                  beforeCaret.dropFirst(indentation.count).allSatisfy({ $0 == "`" }),
+                  Fence.scan(source.substring(to: line.location)).last?.markers.count == 1 {
+            super.insertText("`", replacementRange: selection)
+        } else {
+            super.insertText("``", replacementRange: selection)
+            setSelectedRange(NSRange(location: selection.location + 1, length: 0))
+        }
+    }
+
+    override func insertTab(_ sender: Any?) {
+        if selectedRange().length == 0 {
+            insertText("  ", replacementRange: selectedRange())
+        } else {
+            indentSelectedLines(outdent: false)
+        }
+    }
+
+    override func insertBacktab(_ sender: Any?) {
+        indentSelectedLines(outdent: true)
+    }
+
+    override func insertNewline(_ sender: Any?) {
+        let source = string as NSString
+        let selection = selectedRange()
+        let prefix = source.substring(to: selection.location)
+        var indentation = ""
+        if Fence.scan(prefix).last?.markers.count == 1 {
+            let line = source.lineRange(for: NSRange(location: selection.location, length: 0))
+            let beforeCaret = source.substring(with: NSRange(location: line.location,
+                                                            length: selection.location - line.location))
+            indentation = String(beforeCaret.prefix { $0 == " " || $0 == "\t" })
+                .replacingOccurrences(of: "\t", with: "  ")
+        }
+        insertText("\n" + indentation, replacementRange: selection)
+    }
+
+    private func indentSelectedLines(outdent: Bool) {
+        let source = string as NSString
+        let selection = selectedRange()
+        // A selection ending at the next line's start does not include that line.
+        let covered = NSRange(location: selection.location, length: max(0, selection.length - 1))
+        let lines = source.lineRange(for: covered)
+        var replacement = ""
+        var start = selection.location
+        var end = NSMaxRange(selection)
+        var offset = lines.location
+        repeat {
+            let lineRange = source.lineRange(for: NSRange(location: offset, length: 0))
+            let line = source.substring(with: lineRange)
+            let removed = outdent ? (line.hasPrefix("\t") ? 1 : line.prefix(2).prefix { $0 == " " }.count) : 0
+            let added = outdent ? 0 : 2
+            replacement += (outdent ? "" : "  ") + String(line.dropFirst(removed))
+            func adjusted(_ position: Int) -> Int {
+                position < offset ? position : position - min(removed, position - offset) + added
+            }
+            // Map original selection endpoints through each leading-whitespace edit.
+            start += adjusted(selection.location) - selection.location
+            end += adjusted(NSMaxRange(selection)) - NSMaxRange(selection)
+            offset = NSMaxRange(lineRange)
+        } while offset < NSMaxRange(lines)
+        guard replacement != source.substring(with: lines) else { return }
+        super.insertText(replacement, replacementRange: lines)
+        setSelectedRange(NSRange(location: start, length: end - start))
     }
 
     override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
