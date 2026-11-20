@@ -13,7 +13,7 @@ swift test
 ./bin/ia-nano prompt.md
 ```
 
-For development, `./script/build_and_run.sh` builds a debug app bundle and opens it. `--verify` also checks that it launched; `--debug`, `--logs`, and `--telemetry` provide debugging entry points. Close the previous development editor before rebuilding. The Codex Run action uses this script.
+For development, `./script/build_and_run.sh` builds a debug app bundle and opens it. `--verify` also checks that it launched; `--debug`, `--logs`, and `--telemetry` provide debugging entry points. Builds stop the matching idle development host; open editors or settings prevent bundle replacement. The Codex Run action uses this script.
 
 ## Use from your terminal
 
@@ -29,23 +29,34 @@ response=$(ia-nano)
 ia-nano -- -unusual-filename
 ```
 
-`ia-nano FILE` waits for the editor to finish, saving to the same file. `ia-nano -` reads stdin through EOF and writes the edited text to stdout on completion. Without arguments, the editor starts empty and returns its text on stdout. Only one file is accepted per invocation. Every invocation owns its own process and window, so multiple waiting callers remain independent.
+`ia-nano FILE` waits for the editor to finish, saving to the same file. `ia-nano -` reads stdin through EOF and writes the edited text to stdout on completion. Without arguments, the editor starts empty and returns its text on stdout. Only one file is accepted per invocation. Each invocation has a lightweight waiting terminal client and its own editing session. A single resident GUI process serves sessions for that app-bundle location; callers keep separate output and exit status.
 
 | Shortcut | Action |
 | --- | --- |
 | Ctrl+W or Cmd+W | Save/submit and close |
-| Cmd+Q | Save/submit and quit |
-| Cmd+S | Save file without closing |
+| Cmd+Q | Finish all sessions and genuinely quit; failures keep their editors open |
+| Cmd+S | Save file without closing; Save As for an output-only buffer |
+| Cmd+Shift+S | Save As |
 | Cmd+, | Open Settings |
 | Cmd+Escape | Cancel without submitting or making additional writes |
 | Cmd+Z / Cmd+Shift+Z | Undo / redo |
 | Tab / Shift+Tab | Indent / unindent by two spaces (selected lines supported) |
 
-Cancellation does not revert earlier Cmd+S saves. Escape alone does not discard text. Exit status is `0` for success, `1` for cancellation, and `2` for argument/loading errors. Output mode writes only your text to stdout; diagnostics go to stderr. Save/output errors keep the editor open so text can be recovered.
+Cancellation does not revert earlier Cmd+S saves. Escape alone does not discard text. Exit status is `0` for success, `1` for cancellation, and `2` for argument, loading, connection, or stdout-delivery errors. Output mode writes only your text to stdout; diagnostics go to stderr. Save/output errors keep the editor open so text can be recovered.
 
 Open **iA Nano → Settings…** (Cmd+,) to choose the accent color. Each card previews the rounded caret; the selection applies immediately and persists across launches. Blue is the default. Settings can be closed with Cmd+W, Ctrl+W, or Escape without submitting your text.
 
 Drag the empty strip at the top to move the window; drag its edges to resize. The editor follows the system light/dark appearance. Typing a backtick inserts a matching backtick, or wraps selected text. Typing three backticks at the start of a line adds a closing fence on the next line, leaving the caret after the opening fence for a language name. Pasted text stays unchanged. Text stays raw: backticks are visible, and syntax colors do not become document formatting. Use `ruby` / `rb` or `ts` / `typescript` after an opening fence. An unfinished fenced block is highlighted through the end of the document. Other languages stay plain. Enter inside a fenced code block carries the current line’s indentation onto the new line; it does not infer additional indentation from language syntax.
+
+## Residency and recovery
+
+After first use, the GUI stays running. Closing the last editor hides its Dock icon and menu bar, unless Settings is still open. Reopening reuses the host. No login item is installed. Development and installed copies have separate hosts, identified by their canonical bundle locations.
+
+Cmd+W/Ctrl+W finishes only the current editor; Cmd+Escape cancels only that session. Cmd+Q finishes every session and exits only after all saves and output acknowledgments succeed. To stop a host from a script, run `ia-nano --quit-if-idle`: it succeeds if no host exists or the host is idle, and refuses while any editor or settings window is open. `--help` and `--version` never start the GUI.
+
+If a terminal exits or is interrupted, its editor stays open with a persistent disconnected notice. File buffers can still be saved. For output-only buffers, use Cmd+S / Save As or copy the text; closing without saving requires an explicit discard choice. Stdout must be successfully written and acknowledged before an output session closes. Failed delivery leaves the text recoverable. A host crash releases waiting clients with status 2 and a diagnostic; requests are never automatically replayed.
+
+The shell launcher and `IA_NANO_APP` override are unchanged. `Contents/MacOS/ia-nano` is the Foundation-only client; Finder launches `ia-nano-gui`. IPC uses bounded frames and chunked payloads with no document-size cap, owner-only socket directories, verified peer user IDs, and a host-lifetime exclusive lock. An incompatible idle host is replaced; active sessions are never terminated automatically.
 
 ## File behavior
 
@@ -54,7 +65,7 @@ Drag the empty strip at the top to move the window; drag its edges to resize. Th
 - Edited files use the original newline convention (CRLF if present, otherwise CR if present, otherwise LF). New text uses LF. No trailing newline is added or removed automatically.
 - Saves resolve symlinks, use an atomic write, and preserve existing POSIX permissions. A changed or deleted file is detected before saving, and an error keeps your buffer open. This check is not a filesystem lock; avoid simultaneous writes to the same file.
 - No background autosave. Cancelled edits remain unsaved unless you explicitly saved earlier.
-- This is a small prompt editor: no tabs, project sidebar, preview, language server, or persistent background service.
+- This is a small prompt editor: no tabs, project sidebar, preview, language server, or launch-at-login service.
 
 ## Local installation
 
@@ -65,7 +76,7 @@ The app is ad-hoc signed for local use, not notarized for distribution. From the
 ./script/install.sh
 ```
 
-The installer copies the app to `~/Applications/iA Nano.app` and the launcher to `~/.local/bin/ia-nano`. It is safe to rerun: updates replace the complete app bundle, so removed files do not linger. Close installed editor sessions first. The scripts refuse to overwrite unrelated files at either destination and do not edit your shell configuration.
+The installer copies the app to `~/Applications/iA Nano.app` and the launcher to `~/.local/bin/ia-nano`. It is safe to rerun: updates replace the complete app bundle, so removed files do not linger. The installer stops only the matching idle host; open editors or settings block updates. Older nonresident installations are recognized and must be closed first. The scripts refuse to overwrite unrelated files at either destination and do not edit your shell configuration.
 
 ### zsh
 
@@ -112,7 +123,7 @@ ia-nano notes.md
 printf 'Write a prompt' | ia-nano -
 ```
 
-Finder launch opens an empty editor; use the terminal launcher when you need returned output. The installed copy does not depend on keeping the checkout in place.
+Finder launch or Dock reopen activates an existing editor, or opens an empty one if none exists. Use Cmd+S to save a Finder buffer; use the terminal launcher when you need returned output. The installed copy does not depend on keeping the checkout in place.
 
 To update, close installed iA Nano sessions and rerun:
 
@@ -139,6 +150,23 @@ For isolated script testing, `IA_NANO_INSTALL_ROOT` overrides the home-directory
 
 `swift test` covers invocation parsing, UTF-8 and newline round trips, symlink and permission preservation, file conflicts, failure paths, and fenced highlighting with Unicode offsets. Run `python3 script/ui_smoke.py` for an interactive file/pipe/cancellation/concurrency check; follow its printed keyboard instructions. Additional manual checks cover focus, undo, caret rendering, dragging/resizing, and save-error recovery.
 
-The initial Apple Silicon release bundle measured 4.2 MB. Two local launches presented their windows in 127–146 ms after process entry (excluding executable loading). Set `IA_NANO_METRICS=1` to print this timing to stderr. These measurements are not a cold-start guarantee.
+`python3 -m unittest discover -s Tests/Resident -v` exercises real release executables in isolated locations: concurrent startup, independent requests, stale sockets, mismatched protocols/builds, disconnects, and host crashes. Build the release bundle first. Two optional keyboard-driven tests require `IA_NANO_UI_TESTS=1` and macOS Accessibility access.
+
+Swift tests also cover multi-session quit with save conflicts, output acknowledgment/failure, recovery through Save As, framing and binary payloads, and release of completed controllers. See [validation notes](docs/residency-validation.md) for measurements and remaining manual checks.
+
+### Opening performance
+
+`IA_NANO_METRICS=1 ia-nano` reports **cold** or **warm** client-entry-to-window-ready timing on stderr. This includes IPC and window setup, but excludes executable loading before client entry and does not measure pixels appearing on screen. First use still starts AppKit; warm use reuses the resident process.
+
+On this Mac, the prior release measured median **136.1 ms**, p95 **194.1 ms** over 30 repeated launches. The resident release harness measured median **35.7 ms**, p95 **51.4 ms** over 30 warm openings, meeting the <50/<100 ms targets. The harness launches the real release terminal client against the optimized AppKit host code inside XCTest, completes each editor, and verifies the session registry returns to empty. These are different launch conditions, not a screen-presentation comparison. One standalone cold resident launch measured **160.3 ms**.
+
+Reproduce the warm harness with:
+
+```sh
+./script/package.sh release
+IA_NANO_BENCHMARK=1 swift test -c release --filter testReleaseWarmBenchmark
+```
+
+`python3 script/benchmark.py` runs the separate packaged-GUI benchmark with keyboard automation; it requires Accessibility access and stable keyboard focus.
 
 An independent project inspired by focused writing tools; not affiliated with iA.

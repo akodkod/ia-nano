@@ -6,8 +6,15 @@ CONFIGURATION="${1:-release}"
 swift build -c "$CONFIGURATION" >&2
 BUILD_DIR="$(swift build -c "$CONFIGURATION" --show-bin-path)"
 APP="$ROOT_DIR/dist/iA Nano.app"
+if [ -x "$APP/Contents/MacOS/ia-nano-gui" ]; then
+    "$APP/Contents/MacOS/ia-nano" --quit-if-idle
+elif /bin/ps -axww -o command= | /usr/bin/awk -v exe="$APP/Contents/MacOS/ia-nano" '$0 == exe || index($0, exe " ") == 1 { found=1 } END { exit !found }'; then
+    echo "Close development editors before rebuilding the bundle." >&2
+    exit 2
+fi
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BUILD_DIR/ia-nano" "$APP/Contents/MacOS/ia-nano"
+cp "$BUILD_DIR/ia-nano-gui" "$APP/Contents/MacOS/ia-nano-gui"
 # SwiftPM locates resource bundles beside the executable on macOS.
 for resource in "$BUILD_DIR"/*.bundle; do
     [ ! -d "$resource" ] || cp -R "$resource" "$APP/Contents/MacOS/"
@@ -23,7 +30,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleExecutable</key><string>ia-nano</string>
+<key>CFBundleExecutable</key><string>ia-nano-gui</string>
+<key>LSUIElement</key><true/>
 <key>CFBundleIdentifier</key><string>app.ianano.editor</string>
 <key>CFBundleName</key><string>iA Nano</string>
 <key>CFBundleDisplayName</key><string>iA Nano</string>
@@ -37,5 +45,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict></plist>
 PLIST
 /usr/libexec/PlistBuddy -c "Merge '$ICON_INFO'" "$APP/Contents/Info.plist"
+codesign --force --sign - "$APP/Contents/MacOS/ia-nano" >&2
+codesign --force --sign - "$APP/Contents/MacOS/ia-nano-gui" >&2
 codesign --force --sign - "$APP" >&2
 printf '%s\n' "$APP"

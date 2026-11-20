@@ -103,6 +103,21 @@ class InstallationTests(unittest.TestCase):
             process.terminate()
             process.wait()
 
+    def test_resident_idle_control_and_busy_refusal(self):
+        self.run_script("install.sh")
+        executable = self.app / "Contents/MacOS/ia-nano"
+        (self.app / "Contents/MacOS/ia-nano-gui").write_text("resident marker")
+        (self.app / "Contents/MacOS/ia-nano-gui").chmod(0o755)
+        executable.unlink()
+        executable.write_text('#!/bin/sh\n[ "$1" = --quit-if-idle ] || exit 9\nexit 2\n')
+        executable.chmod(0o755)
+        self.run_script("install.sh", success=False)
+        self.run_script("uninstall.sh", success=False)
+        self.assertTrue(self.app.exists())
+        executable.write_text('#!/bin/sh\n[ "$1" = --quit-if-idle ] || exit 9\nexit 0\n')
+        self.run_script("uninstall.sh")
+        self.assertFalse(self.app.exists())
+
     def test_failed_launcher_install_restores_previous_app(self):
         self.run_script("install.sh")
         (self.source / "version").write_text("two")

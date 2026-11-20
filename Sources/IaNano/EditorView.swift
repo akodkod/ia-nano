@@ -187,6 +187,7 @@ final class DragRegion: NSView {
 final class EditorController: NSWindowController, NSWindowDelegate, NSTextViewDelegate {
     let editor: EditorView
     private var buffer: TextDocument
+    private let returnsOutput: Bool
     private let onExit: (Int32) -> Void
     private let highlighter: SyntaxHighlighter
     private let highlightingQueue = DispatchQueue(label: "app.ianano.highlight", qos: .userInitiated)
@@ -194,9 +195,14 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextViewDe
     private var revision = 0
     private var highlights: [Highlight] = []
     private var finishing = false
+    private var disconnected = false
+    var deliverOutput: ((Data) -> Void)?
+    var onFailure: (() -> Void)?
+    private let notice = NSTextField(wrappingLabelWithString: "")
 
     init(buffer: TextDocument, highlighter: SyntaxHighlighter, onExit: @escaping (Int32) -> Void) {
         self.buffer = buffer
+        returnsOutput = buffer.url == nil
         self.highlighter = highlighter
         self.onExit = onExit
         let storage = NSTextStorage()
@@ -234,11 +240,19 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextViewDe
         scroll.drawsBackground = false
         scroll.borderType = .noBorder
         content.addSubview(scroll)
+        notice.translatesAutoresizingMaskIntoConstraints = false
+        notice.textColor = .systemOrange
+        notice.font = .systemFont(ofSize: 12)
+        notice.isHidden = true
+        content.addSubview(notice)
         let drag = DragRegion()
         drag.translatesAutoresizingMaskIntoConstraints = false
         drag.setAccessibilityLabel("Drag to move iA Nano")
         content.addSubview(drag)
         NSLayoutConstraint.activate([
+            notice.topAnchor.constraint(equalTo: content.topAnchor, constant: 28),
+            notice.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 18),
+            notice.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -18),
             drag.topAnchor.constraint(equalTo: content.topAnchor),
             drag.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             drag.trailingAnchor.constraint(equalTo: content.trailingAnchor),
@@ -282,7 +296,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextViewDe
         scroll.documentView = editor
         editor.delegate = self
         editor.complete = { [weak self] in self?.finish() }
-        editor.cancel = { [weak self] in self?.onExit(1) }
+        editor.cancel = { [weak self] in self?.cancelSession() }
         editor.save = { [weak self] in self?.save() }
         editor.appearanceChanged = { [weak self] in self?.applyHighlights() }
         if let screen = NSScreen.main {
@@ -306,19 +320,86 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextViewDe
     func windowShouldClose(_ sender: NSWindow) -> Bool { finish(); return false }
 
     @objc func save() {
-        guard buffer.url != nil else { return }
+        if buffer.url == nil { saveAs(); return }
         do { try buffer.save(editor.string) }
-        catch { show(error) }
+        catch { onFailure?(); show(error) }
+    }
+
+    @objc func saveAs() {
+        let panel = NSSavePanel()
+        guard let window else { return }
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self, response == .OK, let url = panel.url else { return }
+            do {
+                try self.saveAs(to: url)
+            } catch { self.onFailure?(); self.show(error) }
+        }
+    }
+
+    func saveAs(to url: URL) throws {
+        let data = buffer.encoded(editor.string)
+        try data.write(to: url, options: .atomic)
+        buffer = try TextDocument(data: data, url: url)
+        window?.title = url.lastPathComponent
+    }
+
+    func markDisconnected() {
+        disconnected = true
+        finishing = false
+        editor.isEditable = true
+        notice.stringValue = "Terminal disconnected. Output cannot reach the caller. Save with Cmd+S or copy your text."
+        notice.isHidden = false
+        editor.textContainerInset.height = 58
+        onFailure?()
+    }
+
+    func deliveryFailed() { markDisconnected() }
+
+    func completeSession(_ code: Int32) {
+        pendingHighlight?.cancel()
+        pendingHighlight = nil
+        revision += 1
+        editor.undoManager?.removeAllActions()
+        window?.close()
+        window?.delegate = nil
+        window = nil
+        editor.delegate = nil
+        onExit(code)
+    }
+
+    private func cancelSession() {
+        guard !finishing else { return }
+        if disconnected { confirmDiscard(); return }
+        completeSession(1)
+    }
+
+    private func confirmDiscard() {
+        guard let window else { return }
+        onFailure?()
+        let alert = NSAlert()
+        alert.messageText = disconnected ? "Discard this disconnected buffer?" : "Save this buffer before closing?"
+        alert.informativeText = "Save it with Cmd+S or copy it before discarding."
+        alert.addButton(withTitle: "Keep Editing")
+        alert.addButton(withTitle: "Discard")
+        alert.beginSheetModal(for: window) { [weak self] response in
+            if response == .alertSecondButtonReturn { self?.completeSession(1) }
+        }
     }
 
     @objc func finish() {
         guard !finishing else { return }
         do {
             if buffer.url != nil { try buffer.save(editor.string) }
-            else { try FileHandle.standardOutput.write(contentsOf: buffer.encoded(editor.string)) }
-            finishing = true
-            onExit(0)
-        } catch { show(error) }
+            if returnsOutput && !disconnected, let deliverOutput {
+                finishing = true
+                editor.isEditable = false
+                deliverOutput(buffer.encoded(editor.string))
+            } else if buffer.url != nil {
+                completeSession(0)
+            } else {
+                confirmDiscard()
+            }
+        } catch { onFailure?(); show(error) }
     }
 
     private func show(_ error: Error) {

@@ -26,7 +26,11 @@ check_destinations() {
             exit 2
         fi
     fi
-    # Match the installed executable, not other checkouts or preview apps.
+    if [ -x "$APP_DEST/Contents/MacOS/ia-nano-gui" ]; then
+        "$APP_DEST/Contents/MacOS/ia-nano" --quit-if-idle
+        return
+    fi
+    # Older installations have no resident-host control command.
     local processes
     processes="$(/bin/ps -axww -o command=)"
     if printf '%s\n' "$processes" | /usr/bin/awk -v executable="$APP_DEST/Contents/MacOS/ia-nano" '
