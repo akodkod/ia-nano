@@ -37,10 +37,10 @@ final class EditorView: NSTextView {
         var caret = rect
         caret.size.width = 3
         if flag {
-            NSColor.systemBlue.setFill()
+            insertionPointColor.setFill()
             NSBezierPath(roundedRect: caret, xRadius: 1.5, yRadius: 1.5).fill()
         } else {
-            super.drawInsertionPoint(in: caret, color: .systemBlue, turnedOn: false)
+            super.drawInsertionPoint(in: caret, color: insertionPointColor, turnedOn: false)
         }
     }
 
@@ -144,7 +144,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextViewDe
         editor.font = .monospacedSystemFont(ofSize: 19, weight: .regular)
         editor.textColor = .textColor
         editor.backgroundColor = .textBackgroundColor
-        editor.insertionPointColor = .systemBlue
+        editor.insertionPointColor = AppSettings.shared.accent.color
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = 7
         paragraph.tabStops = []

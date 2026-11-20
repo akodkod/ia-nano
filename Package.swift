@@ -17,6 +17,7 @@ let package = Package(
             .product(name: "TreeSitterTypeScript", package: "tree-sitter-typescript")
         ]),
         .executableTarget(name: "IaNano", dependencies: ["NanoCore"]),
-        .testTarget(name: "NanoCoreTests", dependencies: ["NanoCore"])
+        .testTarget(name: "NanoCoreTests", dependencies: ["NanoCore"]),
+        .testTarget(name: "NanoUITests", dependencies: ["IaNano"])
     ]
 )

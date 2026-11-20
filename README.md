@@ -36,10 +36,13 @@ ia-nano -- -unusual-filename
 | Ctrl+W or Cmd+W | Save/submit and close |
 | Cmd+Q | Save/submit and quit |
 | Cmd+S | Save file without closing |
+| Cmd+, | Open Settings |
 | Cmd+Escape | Cancel without submitting or making additional writes |
 | Cmd+Z / Cmd+Shift+Z | Undo / redo |
 
 Cancellation does not revert earlier Cmd+S saves. Escape alone does not discard text. Exit status is `0` for success, `1` for cancellation, and `2` for argument/loading errors. Output mode writes only your text to stdout; diagnostics go to stderr. Save/output errors keep the editor open so text can be recovered.
+
+Open **iA Nano → Settings…** (Cmd+,) to choose the accent color. Each card previews the rounded caret; the selection applies immediately and persists across launches. Blue is the default. Settings can be closed with Cmd+W, Ctrl+W, or Escape without submitting your text.
 
 Drag the empty strip at the top to move the window; drag its edges to resize. The editor follows the system light/dark appearance. Text stays raw: backticks are visible, and syntax colors do not become document formatting. Use `ruby` / `rb` or `ts` / `typescript` after an opening fence. An unfinished fenced block is highlighted through the end of the document. Other languages stay plain.
 
@@ -54,14 +57,45 @@ Drag the empty strip at the top to move the window; drag its edges to resize. Th
 
 ## Local installation
 
-The app is ad-hoc signed for local use, not notarized for distribution. The launcher can be symlinked into a directory on PATH:
+The app is ad-hoc signed for local use, not notarized for distribution. After building with `./script/package.sh`, run these commands from the project folder:
 
 ```sh
-mkdir -p "$HOME/.local/bin"
-ln -s "$PWD/bin/ia-nano" "$HOME/.local/bin/ia-nano"
+mkdir -p "$HOME/Applications" "$HOME/.local/bin"
+ditto "dist/iA Nano.app" "$HOME/Applications/iA Nano.app"
+cp bin/ia-nano "$HOME/.local/bin/ia-nano"
 ```
 
-Keep the checkout and `dist/iA Nano.app` in place. Alternatively, copy the app wherever you prefer and set `IA_NANO_APP` to its full path before invoking the launcher. Finder launch opens an empty editor; use the terminal launcher when you need returned output.
+Add these lines to `~/.zshrc`:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+export IA_NANO_APP="$HOME/Applications/iA Nano.app"
+export EDITOR=ia-nano
+export VISUAL=ia-nano
+```
+
+Reload your shell configuration:
+
+```sh
+source ~/.zshrc
+```
+
+You can now launch the app from Finder or use it from your terminal:
+
+```sh
+ia-nano notes.md
+printf 'Write a prompt' | ia-nano -
+```
+
+Finder launch opens an empty editor; use the terminal launcher when you need returned output. The installed copy does not depend on keeping the checkout in place.
+
+To update, close running iA Nano sessions, rebuild, and copy the app and launcher again from the project folder:
+
+```sh
+./script/package.sh
+ditto "dist/iA Nano.app" "$HOME/Applications/iA Nano.app"
+cp bin/ia-nano "$HOME/.local/bin/ia-nano"
+```
 
 ## Checks
 

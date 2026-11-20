@@ -23,6 +23,7 @@ Exit codes: 0 completed, 1 cancelled, 2 invocation or input error.
 
 final class ApplicationDelegate: NSObject, NSApplicationDelegate {
     var controller: EditorController?
+    private var settingsController: SettingsController?
     let document: TextDocument
     let highlighter: SyntaxHighlighter
 
@@ -37,6 +38,8 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
             Darwin.exit(code)
         }
         controller?.present()
+        NotificationCenter.default.addObserver(self, selector: #selector(updateAccent),
+            name: AppSettings.didChange, object: AppSettings.shared)
         if ProcessInfo.processInfo.environment["IA_NANO_METRICS"] == "1" {
             let milliseconds = (ProcessInfo.processInfo.systemUptime - launchStarted) * 1000
             let message = String(format: "ia-nano: window presented in %.1f ms (after process entry)\n", milliseconds)
@@ -49,12 +52,28 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
         return .terminateCancel
     }
 
+    @objc private func updateAccent() {
+        controller?.editor.insertionPointColor = AppSettings.shared.accent.color
+        controller?.editor.needsDisplay = true
+    }
+
+    @objc private func openSettings() {
+        if settingsController == nil {
+            settingsController = SettingsController(settings: AppSettings.shared)
+            settingsController?.onClose = { [weak self] in self?.controller?.present() }
+        }
+        settingsController?.present()
+    }
+
     private func installMenu() {
         let menu = NSMenu()
         let appItem = NSMenuItem()
         menu.addItem(appItem)
         let appMenu = NSMenu(title: "iA Nano")
         appItem.submenu = appMenu
+        let settingsItem = appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit iA Nano", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let editItem = NSMenuItem()
         menu.addItem(editItem)

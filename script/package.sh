@@ -12,6 +12,13 @@ cp "$BUILD_DIR/ia-nano" "$APP/Contents/MacOS/ia-nano"
 for resource in "$BUILD_DIR"/*.bundle; do
     [ ! -d "$resource" ] || cp -R "$resource" "$APP/Contents/MacOS/"
 done
+# Compile the editable Icon Composer source for modern and legacy macOS.
+ICON_INFO="$BUILD_DIR/nano-icon-info.plist"
+xcrun actool "$ROOT_DIR/Artwork/Nano.icon" \
+    --compile "$APP/Contents/Resources" \
+    --platform macosx --minimum-deployment-target 14.0 \
+    --app-icon Nano --output-partial-info-plist "$ICON_INFO" \
+    --output-format human-readable-text >&2
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -29,5 +36,6 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>NSHumanReadableCopyright</key><string>iA Nano is an independent project, not affiliated with iA.</string>
 </dict></plist>
 PLIST
+/usr/libexec/PlistBuddy -c "Merge '$ICON_INFO'" "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP" >&2
 printf '%s\n' "$APP"
