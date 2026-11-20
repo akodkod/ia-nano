@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+LAUNCHER="${BASH_SOURCE[0]}"
+while [ -L "$LAUNCHER" ]; do
+    LAUNCHER_DIR="$(cd "$(dirname "$LAUNCHER")" && pwd)"
+    LAUNCHER="$(readlink "$LAUNCHER")"
+    [[ "$LAUNCHER" = /* ]] || LAUNCHER="$LAUNCHER_DIR/$LAUNCHER"
+done
+ROOT_DIR="$(cd "$(dirname "$LAUNCHER")/.." && pwd)"
+APP="${IA_NANO_APP:-$ROOT_DIR/dist/iA Nano.app}"
+if [ ! -x "$APP/Contents/MacOS/ia-nano" ]; then
+    printf 'ia-nano: app not found; run script/package.sh or set IA_NANO_APP.\n' >&2
+    exit 2
+fi
+exec "$APP/Contents/MacOS/ia-nano" "$@"
