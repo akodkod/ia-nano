@@ -36,7 +36,12 @@ final class EditorView: NSTextView {
     override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
         var caret = rect
         caret.size.width = 3
-        super.drawInsertionPoint(in: caret, color: .systemBlue, turnedOn: flag)
+        if flag {
+            NSColor.systemBlue.setFill()
+            NSBezierPath(roundedRect: caret, xRadius: 1.5, yRadius: 1.5).fill()
+        } else {
+            super.drawInsertionPoint(in: caret, color: .systemBlue, turnedOn: false)
+        }
     }
 
     override func setNeedsDisplay(_ rect: NSRect, avoidAdditionalLayout flag: Bool) {
