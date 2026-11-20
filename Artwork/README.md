@@ -5,11 +5,12 @@ bundled with Xcode. It contains two SVG layers, Cursor and Dot, on a solid
 background, with explicit light, dark, and tinted mark appearances. The mark has no glass,
 specular highlight, translucency, or shadow; the system supplies the enclosure.
 
-The artwork preserves the approved Paper E1 Compact geometry, scaled exactly
-from a 256-unit canvas to 1024 units:
+The artwork enlarges the original Paper E1 Compact mark to twice its size,
+centered on the 1024-unit canvas for better visibility across macOS:
 
-- Cursor: x 528, y 384, width 40, height 256, corner radius 20.
-- Dot: center 436, 620; radius 20.
+- Cursor: x 564, y 256, width 80, height 512, corner radius 40.
+- Dot: center 420, 728; radius 40.
+- Horizontal gap between the dot and caret: 104 units.
 - Caret: a subtle top-to-bottom purple gradient, `#D552E6` to `#BF2ED7`
   in light mode and `#E45CF4` to `#CE35E9` in dark mode.
 - Dot: a tonal gradient, `#505050` to `#383838` in light mode and `#FAFAFA`
@@ -27,5 +28,4 @@ the packaging script merges before signing. The deployment target stays macOS 14
 
 Generated icons belong in `dist/`, not in source control. Rebuild with
 `./script/package.sh` after editing the document. Inspect the result in Finder
-and the Dock; at 16 px the deliberately small mark is subtle. The Paper-specific
-16 px optical variant is not part of this first Composer source.
+and the Dock; the enlarged mark also improves legibility at small sizes.

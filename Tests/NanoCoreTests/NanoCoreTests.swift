@@ -70,6 +70,21 @@ final class NanoCoreTests: XCTestCase {
         XCTAssertTrue(highlights.allSatisfy { NSMaxRange($0.range) <= (source as NSString).length })
     }
 
+    func testInlineCodeHighlights() throws {
+        let source = "👋 `my word` and `привіт 👩🏽‍💻` then `unfinished"
+        let highlights = try SyntaxHighlighter().highlights(in: source)
+        let spans = highlights.filter { $0.kind == .inlineCode }
+        XCTAssertEqual(spans.map { (source as NSString).substring(with: $0.range) }, ["my word", "привіт 👩🏽‍💻"])
+        let markers = highlights.filter { $0.kind == .fence }
+        XCTAssertEqual(markers.map { (source as NSString).substring(with: $0.range) }, ["`", "`", "`", "`"])
+    }
+
+    func testInlineCodeExcludesFencesAndUnpairedTicks() throws {
+        let source = "`before`\n```unknown\n`inside`\n```\n`after`\n``double`` and \\`escaped`\n`split\nline`\n```ts\nconst x = `template`;"
+        let spans = try SyntaxHighlighter().highlights(in: source).filter { $0.kind == .inlineCode }
+        XCTAssertEqual(spans.map { (source as NSString).substring(with: $0.range) }, ["before", "after"])
+    }
+
     func testLongerFenceAndUnknownLanguages() throws {
         let source = "````ruby\n```\n42\n````\n```unknown\n42\n```\n"
         let fences = Fence.scan(source)

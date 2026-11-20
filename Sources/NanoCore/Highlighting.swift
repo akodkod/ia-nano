@@ -42,7 +42,7 @@ public struct Fence: Equatable {
     }
 }
 
-public enum TokenKind: Sendable { case comment, string, number, keyword, type, function, fence }
+public enum TokenKind: Sendable { case comment, string, number, keyword, type, function, fence, inlineCode }
 public struct Highlight: Sendable {
     public let range: NSRange
     public let kind: TokenKind
@@ -60,7 +60,15 @@ public final class SyntaxHighlighter {
     public func highlights(in text: String) -> [Highlight] {
         let source = text as NSString
         var result: [Highlight] = []
-        for fence in Fence.scan(text) {
+        let fences = Fence.scan(text)
+        var proseStart = 0
+        for fence in fences {
+            let start = fence.markers[0].location
+            result += inlineHighlights(in: source, range: NSRange(location: proseStart, length: start - proseStart))
+            proseStart = max(NSMaxRange(fence.content), NSMaxRange(fence.markers.last!))
+        }
+        result += inlineHighlights(in: source, range: NSRange(location: proseStart, length: source.length - proseStart))
+        for fence in fences {
             result += fence.markers.map { Highlight(range: $0, kind: .fence) }
             let parser: Parser
             switch fence.language {
@@ -94,6 +102,16 @@ public final class SyntaxHighlighter {
             }
         }
         return result
+    }
+
+    private static let inlineCode = try! NSRegularExpression(pattern: #"(?<![`\\])`([^`\r\n]+)`(?!`)"#)
+
+    private func inlineHighlights(in source: NSString, range: NSRange) -> [Highlight] {
+        Self.inlineCode.matches(in: source as String, range: range).flatMap {
+            [Highlight(range: NSRange(location: $0.range.location, length: 1), kind: .fence),
+             Highlight(range: $0.range(at: 1), kind: .inlineCode),
+             Highlight(range: NSRange(location: NSMaxRange($0.range) - 1, length: 1), kind: .fence)]
+        }
     }
 
     private static let keywords: Set<String> = [

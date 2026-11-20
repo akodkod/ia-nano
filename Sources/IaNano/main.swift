@@ -53,8 +53,7 @@ final class ApplicationDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func updateAccent() {
-        controller?.editor.insertionPointColor = AppSettings.shared.accent.color
-        controller?.editor.needsDisplay = true
+        controller?.updateAccent()
     }
 
     @objc private func openSettings() {
@@ -104,6 +103,11 @@ do {
     }
     let highlighter = try SyntaxHighlighter()
     let app = NSApplication.shared
+    // CLI and debugger launches bypass Launch Services' app-icon setup.
+    if let iconURL = Bundle.main.url(forResource: "Nano", withExtension: "icns"),
+       let icon = NSImage(contentsOf: iconURL) {
+        app.applicationIconImage = icon
+    }
     app.setActivationPolicy(.regular)
     let delegate = ApplicationDelegate(document: document, highlighter: highlighter)
     app.delegate = delegate

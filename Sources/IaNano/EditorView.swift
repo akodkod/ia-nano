@@ -1,6 +1,31 @@
 import AppKit
 import NanoCore
 
+private enum EditorColors {
+    static let background = NSColor(name: "EditorBackground") { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(calibratedWhite: 0.12, alpha: 1)
+            : .white
+    }
+    static let text = NSColor(name: "EditorText") { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? .textColor
+            : NSColor(calibratedWhite: 0.18, alpha: 1)
+    }
+}
+
+private final class EditorBackgroundView: NSView {
+    override var isOpaque: Bool { true }
+    override func draw(_ dirtyRect: NSRect) {
+        EditorColors.background.setFill()
+        dirtyRect.fill()
+    }
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+}
+
 final class EditorView: NSTextView {
     var complete: (() -> Void)?
     var cancel: (() -> Void)?
@@ -94,12 +119,12 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextViewDe
         window.isRestorable = false
         window.tabbingMode = .disallowed
         window.minSize = NSSize(width: 360, height: 240)
-        window.backgroundColor = .textBackgroundColor
+        window.backgroundColor = EditorColors.background
         for button: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
             window.standardWindowButton(button)?.isHidden = true
         }
         window.delegate = self
-        let content = NSView()
+        let content = EditorBackgroundView()
         window.contentView = content
         let scroll = NSScrollView()
         scroll.translatesAutoresizingMaskIntoConstraints = false
@@ -142,15 +167,15 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextViewDe
         editor.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         editor.textContainerInset = NSSize(width: 42, height: 22)
         editor.font = .monospacedSystemFont(ofSize: 19, weight: .regular)
-        editor.textColor = .textColor
-        editor.backgroundColor = .textBackgroundColor
+        editor.textColor = EditorColors.text
+        editor.backgroundColor = EditorColors.background
         editor.insertionPointColor = AppSettings.shared.accent.color
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = 7
         paragraph.tabStops = []
         paragraph.defaultTabInterval = 46
         editor.defaultParagraphStyle = paragraph
-        editor.typingAttributes = [.font: editor.font!, .foregroundColor: NSColor.textColor, .paragraphStyle: paragraph]
+        editor.typingAttributes = [.font: editor.font!, .foregroundColor: EditorColors.text, .paragraphStyle: paragraph]
         editor.string = buffer.text
         editor.textStorage?.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: (buffer.text as NSString).length))
         editor.setAccessibilityLabel("Plain text editor")
@@ -221,6 +246,12 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextViewDe
         highlightingQueue.asyncAfter(deadline: .now() + 0.08, execute: item)
     }
 
+    func updateAccent() {
+        editor.insertionPointColor = AppSettings.shared.accent.color
+        applyHighlights()
+        editor.needsDisplay = true
+    }
+
     private func applyHighlights() {
         guard let layout = editor.layoutManager else { return }
         let length = (editor.string as NSString).length
@@ -234,6 +265,7 @@ final class EditorController: NSWindowController, NSWindowDelegate, NSTextViewDe
             case .keyword: color = .systemPurple
             case .type: color = .systemTeal
             case .function: color = .systemBlue
+            case .inlineCode: color = AppSettings.shared.accent.color
             }
             layout.addTemporaryAttribute(.foregroundColor, value: color, forCharacterRange: span.range)
         }
